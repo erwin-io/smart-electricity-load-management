@@ -1,0 +1,52 @@
+<!doctype html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configuration · Smart Load</title>
+<link rel="stylesheet" href="/css/styles.css">
+</head><body>
+<div class="container">
+  <div class="header">
+    <div class="brand"><div class="logo"></div> Smart Load</div>
+    <div class="nav">
+      <a href="/dashboard">Dashboard</a>
+      <a class="active" href="/configuration">Configuration</a>
+      <button class="menu-btn" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-6">
+      <div class="card">
+        <h4 style="margin:0 0 8px">Auth</h4>
+        <div class="label">Username</div>
+        <input id="cfgUser" class="input" placeholder="username">
+        <div class="label">Password</div>
+        <input id="cfgPass" class="input" type="password" placeholder="new password">
+        <div style="margin-top:10px">
+          <button class="btn" onclick="saveAuth()">Save</button>
+          <button class="btn secondary" onclick="loadConfig()">Cancel</button>
+        </div>
+        <div id="msgAuth" class="small" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <div class="col-6">
+      <div class="card">
+        <h4 style="margin:0 0 8px">Options</h4>
+        <div class="label">Budget (kWh)</div>
+        <input id="cfgBudget" class="input" type="number" step="0.001" min="0" placeholder="e.g. 0.004">
+        <div class="label" style="margin-top:8px">Toggles</div>
+        <div class="switch"><input id="tUsage" type="checkbox"> <label>Show usage graph</label></div>
+        <div class="switch"><input id="tPrioS" type="checkbox"> <label>Show status</label></div>
+        <div class="switch"><input id="tPrioC" type="checkbox"> <label>Show controls</label></div>
+        <div style="margin-top:10px">
+          <button class="btn" onclick="saveOptions()">Save</button>
+          <button class="btn secondary" onclick="loadConfig()">Cancel</button>
+        </div>
+        <div id="msgOpt" class="small" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/js/app.js"></script>
+<script src="/js/config.js"></script>
+</body></html>

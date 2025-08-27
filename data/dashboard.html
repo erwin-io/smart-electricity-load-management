@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Load · Dashboard</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="app">
+  <header class="topbar">
+    <div class="left">
+      <div class="logo-dot"></div>
+      <div class="brand">Smart Load</div>
+    </div>
+    <div class="right">
+      <a class="nav-link active" href="/dashboard">Dashboard</a>
+      <a class="nav-link" href="/configuration">Configuration</a>
+      <button id="btnLogout" class="menu-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- STATUS -->
+    <section class="card">
+      <div class="card-title">Status</div>
+      <div class="grid-3">
+        <div>
+          <div class="kpi-title">Remaining %</div>
+          <div id="kpiPct" class="kpi">—</div>
+          <!-- Gauge -->
+          <div class="gauge-wrap">
+            <div id="gaugeRemain" class="gauge" style="--p:0">
+              <span id="gaugeLabel">0%</span>
+            </div>
+            <div class="muted small">Budget visual</div>
+          </div>
+        </div>
+        <div>
+          <div class="kpi-title">Used (kWh)</div>
+          <div id="kpiUsed" class="kpi">—</div>
+        </div>
+        <div>
+          <div class="kpi-title">Remaining (kWh)</div>
+          <div id="kpiRem" class="kpi">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRAPH -->
+    <section id="secGraph" class="card">
+      <div class="card-title">Live Usage</div>
+      <canvas id="usageGraph" width="940" height="260"></canvas>
+      <div class="muted small">Updates every second</div>
+    </section>
+
+    <!-- RUN CONTROLS -->
+    <section class="card">
+      <div class="card-title">Run Controls</div>
+      <div class="row gap">
+        <button id="btnResume" class="btn btn-primary">Resume</button>
+        <button id="btnStop" class="btn btn-danger">Stop</button>
+        <button id="btnRestart" class="btn">Restart</button>
+        <span id="runMsg" class="muted">OK</span>
+      </div>
+    </section>
+
+    <!-- PRIORITY STATUS -->
+    <section id="secPrioStatus" class="card">
+      <div class="card-title">Priority Status</div>
+      <div class="grid-4">
+        <div id="ps1" class="status-pill">P1</div>
+        <div id="ps2" class="status-pill">P2</div>
+        <div id="ps3" class="status-pill">P3</div>
+        <div id="ps4" class="status-pill">P4</div>
+      </div>
+    </section>
+
+    <!-- PRIORITY CONTROLS -->
+    <section id="secPrio" class="card">
+      <div class="card-title">Priority Controls</div>
+      <div class="grid-4">
+        <button id="p1" class="btn btn-toggle">P1</button>
+        <button id="p2" class="btn btn-toggle">P2</button>
+        <button id="p3" class="btn btn-toggle">P3</button>
+        <button id="p4" class="btn btn-toggle">P4</button>
+      </div>
+      <div id="prioMsg" class="muted small"></div>
+    </section>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
