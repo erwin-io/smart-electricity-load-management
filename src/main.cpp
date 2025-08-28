@@ -12,10 +12,13 @@
 #include <math.h>
 #include <vector>
 #include <algorithm>
+#include <DNSServer.h>
 
-/* ===================== Wi-Fi (STA) ===================== */
-#define STA_SSID "HG8145V5_D0A04"
-#define STA_PASS "p75z~${Tn2Iy"
+DNSServer dnsServer;
+
+/* === AP defaults === */
+#define AP_SSID "LoadDroppingWifi"
+#define AP_PASSWORD "loaddropping2025"
 
 /* ===================== PZEM wiring (UART2) ===================== */
 static const int PZEM_RX = 26; // ESP32 RX2 <- PZEM TX
@@ -26,6 +29,7 @@ PZEM004Tv30 pzem(PZEMSerial, PZEM_RX, PZEM_TX);
 /* ===================== SD card (Mini Data Logger) ===================== */
 #define SD_CS 5
 RTC_DS3231 rtc;
+static volatile bool sdMounted = false;
 
 /* ===================== Relays ===================== */
 struct Relay { uint8_t pin; bool activeHigh; };
@@ -103,6 +107,10 @@ struct AppConfig {
 /* ===================== FS mount flags ===================== */
 static bool littlefsMounted = false;
 
+/* ===================== readiness / tasks ===================== */
+volatile bool systemReady = false;  // flips true when slow init completes
+void slowInitTask(void*);
+
 /* ===================== Forwards ===================== */
 double  virtualTotalKWh();
 void    savePauseSnapshot();
@@ -113,6 +121,24 @@ static  bool   parseBoolStr(String v);
 /* ===================== FS helpers ===================== */
 bool fileExists(fs::FS &fs, const char* path){
   File f = fs.open(path); if(!f) return false; f.close(); return true;
+}
+
+/* ====== Robust SD mount (retries) ====== */
+static void sd_mount_with_retries(uint8_t retries=5, uint32_t firstDelayMs=150, uint32_t betweenMs=200){
+  if (sdMounted) return;
+  SPI.end();
+  SPI.begin(18,19,23,SD_CS);
+  delay(firstDelayMs);
+  for (uint8_t i=0;i<retries && !sdMounted;i++){
+    if (SD.begin(SD_CS, SPI, 20000000)){
+      sdMounted = true;
+      Serial.println("SD mounted");
+      break;
+    }
+    Serial.printf("SD mount try %u failed\n", (unsigned)i+1);
+    delay(betweenMs);
+  }
+  if(!sdMounted) Serial.println("SD init failed");
 }
 
 /* ===================== Config load/save ===================== */
@@ -176,9 +202,10 @@ String two(int v){ if(v<10) return "0"+String(v); return String(v); }
 String ampmHour(int h24){ int h=h24%12; if(h==0) h=12; return String(h); }
 String ampmStr(int h24){ return (h24<12)?"AM":"PM"; }
 
-bool syncNTP(){
+// Quick, non-blocking NTP (<= 1s)
+bool syncNTP_quick(){
   configTime(8*3600, 0, "pool.ntp.org", "time.nist.gov"); // Asia/Manila
-  for(int i=0;i<25;i++){ struct tm t; if(getLocalTime(&t)) return true; delay(200); }
+  for(int i=0;i<5;i++){ struct tm t; if(getLocalTime(&t)) return true; delay(200); }
   return false;
 }
 DateTime nowLocal(){
@@ -504,6 +531,7 @@ void handleStatus(AsyncWebServerRequest*req){
   doc["currentA"] = lastCurrentA;
   doc["energy_raw_kwh"]     = lastGoodTotal;
   doc["energy_virtual_kwh"] = virtualTotalKWh();
+  doc["ready"] = systemReady;
 
   String out; serializeJson(doc,out);
   req->send(200,"application/json",out);
@@ -1016,39 +1044,44 @@ static bool parseBoolStr(String v){ v.toLowerCase(); return (v=="1"||v=="true"||
 
 /* ===================== Wi-Fi ===================== */
 void startWiFi(){
-  WiFi.mode(WIFI_STA); WiFi.begin(STA_SSID,STA_PASS);
-  Serial.printf("Connecting to %s",STA_SSID);
-  int tries=0; while(WiFi.status()!=WL_CONNECTED && tries++<40){ delay(250); Serial.print("."); }
-  if(WiFi.status()==WL_CONNECTED){ Serial.printf("\nConnected! IP=%s\n",WiFi.localIP().toString().c_str()); }
-  else{ Serial.println("\nWiFi not connected (offline)."); }
+  // Force AP-only mode (no STA at all)
+  WiFi.mode(WIFI_AP);
+  delay(50);
+
+  // Optional: set a friendly AP subnet and static IP (default 192.168.4.1)
+  IPAddress apIP(192,168,4,1);
+  IPAddress apGW(192,168,4,1);
+  IPAddress apMASK(255,255,255,0);
+  WiFi.softAPConfig(apIP, apGW, apMASK);
+
+  // Start AP
+  const int channel = 6;
+  const bool hidden = false;
+  const int max_conn = 8;
+  WiFi.softAP(AP_SSID, AP_PASSWORD, channel, hidden, max_conn);
+
+  // Captive-portal DNS (everything -> AP IP)
+  dnsServer.start(53, "*", apIP);
+
+  Serial.println("AP started.");
+  Serial.print("IP: "); Serial.println(WiFi.softAPIP());
 }
 
-/* ===================== Setup / Loop ===================== */
-uint32_t lastPrint = 0;
-uint32_t lastStateSaveMs = 0;
+/* ===================== SLOW INIT TASK ===================== */
+void slowInitTask(void*){
+  // SD (robust)
+  sd_mount_with_retries();
 
-void setup(){
-  Serial.begin(115200); delay(100);
-
-  // Mount LittleFS ONCE with explicit label "littlefs"
-  if(LittleFS.begin(true, "/littlefs", 10, "littlefs")){
-    littlefsMounted = true;
-    Serial.println("[LittleFS] mounted");
+  // NTP / RTC (quick)
+  ntpSynced = syncNTP_quick();
+  if(!rtc.begin()){
+    Serial.println("RTC not found");
   } else {
-    littlefsMounted = false;
-    Serial.println("[LittleFS] mount/format failed");
+    rtcReady = true;
+    if(ntpSynced) rtc.adjust(nowLocal());
   }
 
-  initGroupPins(); allGroups(false);
-
-  startWiFi(); ntpSynced=syncNTP();
-  if(!rtc.begin()){ Serial.println("RTC not found"); }
-  else { rtcReady=true; if(ntpSynced) rtc.adjust(nowLocal()); }
-
-  SPI.begin(18,19,23,SD_CS);
-  if(!SD.begin(SD_CS,SPI,20000000)){ Serial.println("SD init failed"); }
-  else { Serial.println("SD mounted"); }
-
+  // Config + PZEM + snapshot restore
   loadConfig();
 
   PZEMSerial.begin(9600, SERIAL_8N1, PZEM_RX, PZEM_TX);
@@ -1059,27 +1092,55 @@ void setup(){
   frozenPct = 100.0f;
   frozenUsed = 0.0;
 
-  // Prefer CSV restore; fall back to state.json
   bool restored = false;
   if(loadSnapshotFromCsv()){ restored = true; }
   else if(loadPauseSnapshot()){ restored = true; }
 
-  if(restored){
-    paused = true;
-    forceLogNext = true; // log what we show
+  paused = true;
+  forceLogNext = true;
+
+  systemReady = true;   // we’re good
+  Serial.println("[INIT] Background init complete.");
+  vTaskDelete(NULL);
+}
+
+/* ===================== Setup / Loop ===================== */
+uint32_t lastPrint = 0;
+uint32_t lastStateSaveMs = 0;
+
+void setup(){
+  Serial.begin(115200); delay(100);
+
+  // Mount LittleFS (fast)
+  if(LittleFS.begin(true, "/littlefs", 10, "littlefs")){
+    littlefsMounted = true;
+    Serial.println("[LittleFS] mounted");
   } else {
-    paused = true;
-    forceLogNext = true;
+    littlefsMounted = false;
+    Serial.println("[LittleFS] mount/format failed");
   }
 
-  // Routes
+  initGroupPins(); allGroups(false);
+
+  // --- Wi-Fi & server ASAP ---
+  startWiFi();
+
+  // Minimal always-on routes (respond immediately)
+  server.on("/ping", HTTP_GET, [](AsyncWebServerRequest* r){
+    r->send(200, "application/json", systemReady ? "{\"ok\":true,\"ready\":true}" : "{\"ok\":true,\"ready\":false}");
+  });
+  server.on("/login",HTTP_GET,[](AsyncWebServerRequest* r){
+    if(LittleFS.exists("/login.html")) r->send(LittleFS,"/login.html","text/html");
+    else r->send(200,"text/html","<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'><h3>SmartLoad</h3><p>Booting…</p><p><a href=\"/ping\">Check readiness</a></p>");
+  });
+
+  // Full routes
   server.on("/",HTTP_GET,[](AsyncWebServerRequest* r){ r->redirect("/dashboard"); });
   server.on("/dashboard",HTTP_GET,[](AsyncWebServerRequest* r){ if(hasAuth(r)) r->send(LittleFS,"/dashboard.html","text/html"); else r->redirect("/login"); });
   server.on("/configuration",HTTP_GET,[](AsyncWebServerRequest* r){ if(hasAuth(r)) r->send(LittleFS,"/configuration.html","text/html"); else r->redirect("/login"); });
   server.on("/logs",HTTP_GET,[](AsyncWebServerRequest* r){ if(hasAuth(r)) r->send(LittleFS,"/logs.html","text/html"); else r->redirect("/login"); });
-  server.on("/login",HTTP_GET,[](AsyncWebServerRequest* r){ r->send(LittleFS,"/login.html","text/html"); });
 
-  // Static files AFTER specific routes
+  // Static after specific
   server.serveStatic("/",LittleFS,"/");
 
   // APIs
@@ -1161,13 +1222,24 @@ void setup(){
   server.on("/api/logs/export.xls", HTTP_GET, handleLogsExportXls);  // Excel
   server.on("/api/logs/print",      HTTP_GET, handleLogsPrint);      // Print
 
+  // Always send *something* quickly
+  server.onNotFound([](AsyncWebServerRequest* r){
+    r->send(302, "text/plain", ""); r->redirect("/login");
+  });
+
   server.begin();
+  Serial.println("HTTP server started.");
+
+  // --- Kick off the slow stuff in background (core 1 is usually WiFi/Net) ---
+  xTaskCreatePinnedToCore(slowInitTask, "slowInit", 8192, nullptr, 1, nullptr, 1);
 
   manualMask = 0;
   forceLogNext = true;
 }
 
 void loop() {
+  dnsServer.processNextRequest();   // keep captive-portal DNS responsive
+
   currentStatus = computeStatus();
   enforceRelays(currentStatus);
   appendLogMaybe();
@@ -1175,10 +1247,10 @@ void loop() {
   if (millis() - lastPrint >= 1000) {
     const double virtE = currentStatus.usedKWh + energyBaseline;
     Serial.printf(
-      "pct %.2f%% used %.6f rem %.6f | P=%.1fW V=%.1fV I=%.3fA | virtE=%.6f base=%.6f rawE=%.6f\n",
+      "pct %.2f%% used %.6f rem %.6f | P=%.1fW V=%.1fV I=%.3fA | virtE=%.6f base=%.6f rawE=%.6f | ready=%d\n",
       currentStatus.remainingPct, currentStatus.usedKWh, currentStatus.remKWh,
       lastPowerW, lastVoltageV, lastCurrentA,
-      virtE, energyBaseline, lastGoodTotal
+      virtE, energyBaseline, lastGoodTotal, (int)systemReady
     );
     lastPrint = millis();
   }
@@ -1188,5 +1260,5 @@ void loop() {
     lastStateSaveMs = millis();
   }
 
-  delay(200);
+  delay(50);  // snappier than 200ms so DNS + web stay responsive
 }

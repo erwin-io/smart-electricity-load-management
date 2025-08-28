@@ -9,6 +9,7 @@
             "name": "PlatformIO",
             "includePath": [
                 "C:/Development/smart-electricity-load-management/src",
+                "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/DNSServer/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                 "C:/Development/smart-electricity-load-management/.pio/libdeps/esp32dev/RTClib/src",
@@ -222,7 +223,6 @@
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/AsyncUDP/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/BluetoothSerial/src",
-                "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/DNSServer/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/EEPROM/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/ESP32/src",
                 "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/ESPmDNS/src",
@@ -251,6 +251,7 @@
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
                     "C:/Development/smart-electricity-load-management/src",
+                    "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/DNSServer/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                     "C:/Development/smart-electricity-load-management/.pio/libdeps/esp32dev/RTClib/src",
@@ -464,7 +465,6 @@
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/AsyncUDP/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/BluetoothSerial/src",
-                    "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/DNSServer/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/EEPROM/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/ESP32/src",
                     "C:/Users/Erwin/.platformio/packages/framework-arduinoespressif32/libraries/ESPmDNS/src",
