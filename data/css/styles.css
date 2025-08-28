@@ -1,58 +1,113 @@
-/* ============ THEME ============ */
+/* ================= THEME (Light default, Dark via [data-theme="dark"]) ================= */
 :root{
-  --accent: #4b90ff;
-  --surface-1:#0f1623;   /* body bg */
-  --surface-2:#111c2b;   /* cards */
-  --surface-3:#1a2636;   /* buttons/inputs */
+  --accent: #2563eb;
+
+  /* Surfaces & text (LIGHT) */
+  --surface-1:#f6f8fc;   /* body bg */
+  --surface-2:#ffffff;   /* cards */
+  --surface-3:#eef2fb;   /* inputs/buttons */
+  --text-1:#0b1220;
+  --text-2:#44546e;
+  --muted:#6b7a90;
+  --border:#dbe3f1;
+
+  /* Graph colors (canvas) */
+  --graph-grid: rgba(0,0,0,.06);
+  --graph-axis: rgba(0,0,0,.25);
+  --graph-line: var(--accent);
+
+  /* Gauge */
+  --gauge-track:#e6ebf5;
+  --gauge-blue:   #2563eb;  /* 75–100% */
+  --gauge-green:  #16a34a;  /* 50–74%  */
+  --gauge-yellow: #eab308;  /* 25–49%  */
+  --gauge-orange: #f97316;  /* 10–24%  */
+  --gauge-red:    #ef4444;  /*  <10%   */
+}
+:root[data-theme="dark"]{
+  --accent:#4b90ff;
+
+  /* Surfaces & text (DARK) */
+  --surface-1:#0f1623;
+  --surface-2:#111c2b;
+  --surface-3:#1a2636;
   --text-1:#e9eef9;
   --text-2:#b9c7e1;
   --muted:#9eb0cc;
+  --border:#243149;
+
+  /* Graph colors (canvas) */
+  --graph-grid: rgba(255,255,255,.08);
+  --graph-axis: rgba(255,255,255,.25);
+  --graph-line: rgba(105,169,255,.95);
+
+  /* Gauge */
+  --gauge-track:#1c2736;
+  --gauge-blue:   #4b90ff;
+  --gauge-green:  #22c55e;
+  --gauge-yellow: #facc15;
+  --gauge-orange: #fb923c;
+  --gauge-red:    #f87171;
 }
+
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--surface-1);color:var(--text-1);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+body{
+  margin:0;background:var(--surface-1);color:var(--text-1);
+  font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif
+}
 
 /* ============ SHARED ELEMENTS (used by all pages) ============ */
 .card{
   background:var(--surface-2);
   border-radius:14px;
   padding:16px;
-  box-shadow:0 6px 18px rgba(0,0,0,.25) inset;
+  box-shadow:0 6px 18px rgba(0,0,0,.06);
+  border:1px solid var(--border);
 }
 .label{margin-top:8px;color:var(--text-2);font-size:12px}
 .small{font-size:12px}.muted{color:var(--muted)}
+
 .input{
-  width:100%;padding:10px 12px;border-radius:10px;border:1px solid #243149;
-  background:#0b1220;color:var(--text-1);outline:0;transition:border .15s,box-shadow .15s;
+  width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);
+  background:var(--surface-3);color:var(--text-1);outline:0;transition:border .15s,box-shadow .15s;
 }
-.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(75,144,255,.18)}
+.input::placeholder{color:var(--text-2)}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent)}
+
 .switch{display:flex;align-items:center;gap:8px;margin:4px 0}
 .switch label{color:var(--text-1)}
 
 /* Buttons */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;
-  padding:.6rem .9rem;border-radius:.6rem;border:0;
+  padding:.6rem .9rem;border-radius:.6rem;border:1px solid var(--border);
   background:var(--surface-3);color:var(--text-1);
   cursor:pointer;user-select:none;
   transition:transform .05s ease, filter .12s ease, background .2s ease, opacity .2s ease;
 }
-.btn:active{transform:translateY(1px);filter:brightness(.95)}
+.btn:hover{filter:brightness(1.02)}
+.btn:active{transform:translateY(1px);filter:brightness(.98)}
 .btn:disabled,.btn.is-disabled{opacity:.5;cursor:not-allowed;transform:none}
-.btn-primary{background:var(--accent);color:#fff}
+.btn-primary{background:var(--accent);border-color:transparent;color:#fff}
 .btn-primary:hover{filter:brightness(1.05)}
-.btn-danger{background:#e45858;color:#fff}
-.btn-ghost{background:transparent;color:var(--text-2)}
+.btn-danger{background:#e45858;color:#fff;border-color:transparent}
+.btn-ghost{background:transparent;color:var(--text-2);border-color:transparent}
+
 /* For older markup that uses .menu-btn (Login/Config header) */
 .menu-btn{all:unset}
-.menu-btn{display:inline-flex;align-items:center;gap:8px;padding:.5rem .8rem;border-radius:.6rem;color:var(--text-2);cursor:pointer}
-.menu-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.menu-btn{
+  display:inline-flex;align-items:center;gap:8px;padding:.5rem .8rem;border-radius:.6rem;
+  color:var(--text-2);cursor:pointer;border:1px solid transparent
+}
+.menu-btn:hover{color:var(--text-1);background:color-mix(in oklab, var(--surface-3) 70%, transparent)}
+.menu-btn[aria-pressed="true"]{box-shadow:0 0 0 2px color-mix(in oklab, var(--accent) 30%, transparent) inset}
 
 /* Toggle button for Priority Controls */
-.btn-toggle{background:#1c2736;color:#b8c3d6;min-width:74px;font-weight:600}
+.btn-toggle{background:var(--surface-3);color:var(--text-2);min-width:74px;font-weight:600}
 .btn-toggle.is-on{
   background:var(--accent);color:#fff;
-  box-shadow:0 0 0 2px rgba(255,255,255,.15) inset;
+  box-shadow:0 0 0 2px color-mix(in oklab, #fff 15%, transparent) inset; border-color:transparent
 }
 
 /* ============ LOGIN & CONFIG LAYOUT ============ */
@@ -61,58 +116,68 @@ body{margin:0;background:var(--surface-1);color:var(--text-1);font:14px/1.5 syst
 .brand{display:flex;align-items:center;gap:10px;font-weight:700}
 .logo{width:18px;height:18px;border-radius:6px;background:linear-gradient(130deg,#25f2a6,#6aa8ff)}
 .header .nav a{color:var(--text-2);margin-right:16px;text-decoration:none}
-.header .nav a.active{color:#fff}
+.header .nav a.active{color:var(--text-1);font-weight:600}
 
-/* ============ DASHBOARD LAYOUT (scoped to body.app) ============ */
+/* ============ DASHBOARD / LOGS LAYOUT (scoped to body.app) ============ */
 body.app .topbar{
   display:flex;align-items:center;justify-content:space-between;
-  padding:14px 18px;position:sticky;top:0;background:var(--surface-1);z-index:5
+  padding:14px 18px;position:sticky;top:0;background:var(--surface-1);z-index:5;border-bottom:1px solid var(--border)
 }
 body.app .left{display:flex;align-items:center;gap:10px}
-body.app .logo-dot{width:18px;height:18px;border-radius:6px;background:linear-gradient(130deg,#25f2a6,#6aa8ff)}
+body.app .logo-dot{width:18px;height:18px;border-radius:6px;
+  background: url('../../image/logo.png') no-repeat center/contain;
+}
 body.app .brand{font-weight:700}
 body.app .right .nav-link{color:var(--text-2);margin-right:16px;text-decoration:none}
-body.app .right .nav-link.active{color:#fff}
+body.app .right .nav-link.active{color:var(--text-1);font-weight:700}
 
-body.app .content{max-width:980px;margin:18px auto;padding:0 12px}
+body.app .content{max-width:980px;margin:18px auto;padding:0 12px; row-gap: 16px; flex-direction: column; display: flex;}
 body.app .card-title{font-weight:700;margin-bottom:10px}
 body.app .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 body.app .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 body.app .row.gap{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-body.app .kpi-title{color:#9eb0cc;font-size:12px}
-body.app .kpi{font-size:28px;font-weight:800;margin-top:4px}
+body.app .kpi-title{color:var(--muted);font-size:12px; text-align: center;}
+body.app .kpi{font-size:28px;font-weight:800;margin-top:4px; text-align: center;}
 
 /* Canvas (graph) */
-#usageGraph{width:100%;height:auto;display:block;background:#0c1220;border-radius:10px;border:1px solid #243149}
+#usageGraph{
+  width:100%;height:auto;display:block;
+  background:var(--surface-3);
+  border-radius:10px;border:1px solid var(--border)
+}
 
 /* --- Priority Status pills --- */
 .status-pill{
-  background:#1c2736;
-  color:#b8c3d6;
+  background:var(--surface-3);
+  color:var(--text-2);
   text-align:center;
   padding:.6rem 0;
   border-radius:.6rem;
   font-weight:700;
+  border:1px solid var(--border);
 }
 .status-pill.is-on{
   background:var(--accent);
   color:#fff;
-  box-shadow:0 0 0 2px rgba(255,255,255,.15) inset;
+  box-shadow:0 0 0 2px color-mix(in oklab, #fff 15%, transparent) inset;
+  border-color:transparent;
 }
 
 /* ============ GAUGE ============ */
-.gauge-wrap{display:flex;align-items:center;gap:12px;margin-top:6px}
+.gauge-wrap{display:flex;align-items:center;gap:12px;margin-top:6px; flex-direction: column;}
 .gauge{
   --p:0; /* percent 0..100 */
-  width:72px;height:72px;border-radius:50%;
-  background:conic-gradient(var(--accent) calc(var(--p)*1%), #1c2736 0);
-  position:relative;flex:0 0 auto;
+  width:90px;height:90px;border-radius:50%;
+  background:conic-gradient(var(--gauge-color, var(--accent)) calc(var(--p)*1%), var(--gauge-track) 0);
+  position:relative;flex:0 0 auto;border:1px solid var(--border);
+  transition:background .2s ease; /* small fade when color changes */
 }
 .gauge::after{
   content:"";position:absolute;inset:8px;border-radius:50%;
-  background:#0f1623;box-shadow:inset 0 0 0 1px #243149;
+  background:var(--surface-1);box-shadow:inset 0 0 0 1px var(--border);
 }
 .gauge > span{
   position:absolute;inset:0;display:grid;place-items:center;
-  font-weight:800;font-size:14px;color:#fff;
+  font-weight:800;font-size: 28px;color:var(--text-1);
+  z-index: 2;
 }

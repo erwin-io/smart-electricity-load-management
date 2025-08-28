@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Print · Smart Load Management Logs</title>
+  <link rel="icon" type="image/x-icon" href="/image/favicon.ico">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    body {
+      background: #fff;
+      color: #000;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 24px auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .muted {
+      color: #444;
+    }
+
+    @media print {
+      .no-print {
+        display: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="no-print" style="display:flex;gap:8px;justify-content:flex-end;margin:8px 0">
+      <button id="btnNow" class="btn">Print Now</button>
+    </div>
+    <h2>Smart Load Management · Logs</h2>
+    <div id="range" class="muted"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th style="text-align:right">Budget (kWh)</th>
+          <th style="text-align:right">Remaining (kWh)</th>
+          <th style="text-align:right">Used (kWh)</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="meta" class="muted" style="margin-top:6px"></div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const nf6 = new Intl.NumberFormat(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+    const qs = new URLSearchParams(location.search);
+
+    function render(items) {
+      const tb = $("rows"); tb.innerHTML = "";
+      for (const r of items) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+        <td>${r.timestamp}</td>
+        <td style="text-align:right">${nf6.format(r.budget_kwh)}</td>
+        <td style="text-align:right">${nf6.format(r.remaining_kwh)}</td>
+        <td style="text-align:right">${nf6.format(r.used_kwh)}</td>`;
+        tb.appendChild(tr);
+      }
+      $("meta").textContent = items.length + " row(s)";
+    }
+
+    async function load() {
+      const q = qs.toString();
+      const res = await fetch("/api/logs/query?" + q, { credentials: "include" });
+      if (!res.ok) { document.body.innerHTML = "<p>Failed to load logs.</p>"; return; }
+      const json = await res.json();
+      $("range").textContent = "Filter: from=" + (qs.get("from") || "") + " to=" + (qs.get("to") || "");
+      render(json.items || []);
+    }
+    $("btnNow").onclick = () => window.print();
+    load();
+  </script>
+</body>
+
+</html>

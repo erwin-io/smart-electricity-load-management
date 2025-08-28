@@ -2,6 +2,50 @@
 |-- .pio
     |-- libdeps
         |-- esp32dev
+            |-- Adafruit BusIO
+                |-- .github
+                    |-- ISSUE_TEMPLATE.md
+                    |-- PULL_REQUEST_TEMPLATE.md
+                    |-- workflows
+                        |-- githubci.yml
+                |-- .piopm
+                |-- Adafruit_BusIO_Register.cpp
+                |-- Adafruit_BusIO_Register.h
+                |-- Adafruit_GenericDevice.cpp
+                |-- Adafruit_GenericDevice.h
+                |-- Adafruit_I2CDevice.cpp
+                |-- Adafruit_I2CDevice.h
+                |-- Adafruit_I2CRegister.h
+                |-- Adafruit_SPIDevice.cpp
+                |-- Adafruit_SPIDevice.h
+                |-- CMakeLists.txt
+                |-- component.mk
+                |-- examples
+                    |-- genericdevice_uartregtest
+                        |-- .uno.test.skip
+                        |-- genericdevice_uartregtest.ino
+                    |-- genericdevice_uarttest
+                        |-- .uno.test.skip
+                        |-- genericdevice_uarttest.ino
+                    |-- i2corspi_register
+                        |-- i2corspi_register.ino
+                    |-- i2c_address_detect
+                        |-- i2c_address_detect.ino
+                    |-- i2c_readwrite
+                        |-- i2c_readwrite.ino
+                    |-- i2c_registers
+                        |-- i2c_registers.ino
+                    |-- spi_modetest
+                        |-- spi_modetest.ino
+                    |-- spi_readwrite
+                        |-- spi_readwrite.ino
+                    |-- spi_registers
+                        |-- spi_registers.ino
+                    |-- spi_register_bits
+                        |-- spi_register_bits.ino
+                |-- library.properties
+                |-- LICENSE
+                |-- README.md
             |-- ArduinoJson
                 |-- .piopm
                 |-- ArduinoJson.h
@@ -463,8 +507,84 @@
                 |-- src
                     |-- PZEM004Tv30.cpp
                     |-- PZEM004Tv30.h
+            |-- RTClib
+                |-- .github
+                    |-- ISSUE_TEMPLATE.md
+                    |-- PULL_REQUEST_TEMPLATE.md
+                    |-- workflows
+                        |-- githubci.yml
+                |-- .gitignore
+                |-- .piopm
+                |-- code-of-conduct.md
+                |-- examples
+                    |-- customWire_DS3231onSAMD21
+                        |-- .metro_m4.test.only
+                        |-- customWire_DS3231onSAMD21.ino
+                    |-- datecalc
+                        |-- datecalc.ino
+                    |-- ds1307
+                        |-- ds1307.ino
+                    |-- ds1307nvram
+                        |-- ds1307nvram.ino
+                    |-- ds1307SqwPin
+                        |-- ds1307SqwPin.ino
+                    |-- ds3231
+                        |-- ds3231.ino
+                    |-- DS3231_alarm
+                        |-- DS3231_alarm.ino
+                    |-- interrupts1Hz
+                        |-- .leonardo.test.only
+                        |-- .mega2560.test.only
+                        |-- .uno.test.only
+                        |-- interrupts1Hz.ino
+                    |-- pcf8523
+                        |-- pcf8523.ino
+                    |-- pcf8523Countdown
+                        |-- pcf8523Countdown.ino
+                    |-- pcf8563
+                        |-- pcf8563.ino
+                    |-- pcf8563_interrupt
+                        |-- pcf8563_interrupt.ino
+                    |-- softrtc
+                        |-- softrtc.ino
+                    |-- timestamp
+                        |-- timestamp.ino
+                    |-- toString
+                        |-- toString.ino
+                |-- keywords.txt
+                |-- library.properties
+                |-- license.txt
+                |-- README.md
+                |-- src
+                    |-- RTClib.cpp
+                    |-- RTClib.h
+                    |-- RTC_DS1307.cpp
+                    |-- RTC_DS3231.cpp
+                    |-- RTC_Micros.cpp
+                    |-- RTC_Millis.cpp
+                    |-- RTC_PCF8523.cpp
+                    |-- RTC_PCF8563.cpp
+|-- data
+    |-- configuration.html
+    |-- css
+        |-- styles.css
+    |-- dashboard.html
+    |-- image
+        |-- favicon.ico
+        |-- logo.png
+    |-- index.html
+    |-- js
+        |-- app.js
+        |-- config.js
+        |-- dashboard.js
+        |-- login.js
+        |-- logs.js
+    |-- login.html
+    |-- logs.html
+    |-- logs_print.html
 |-- diagram.drawio
 |-- LICENSE
+|-- partitions.csv
 |-- platformio.ini
 |-- README.md
 |-- src

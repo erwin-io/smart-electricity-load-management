@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Smart Load Management · Logs</title>
+  <link rel="icon" type="image/x-icon" href="/image/favicon.ico">
+  <link rel="stylesheet" href="/css/styles.css"/>
+</head>
+<body class="app">
+  <header class="topbar">
+    <div class="left">
+      <div class="logo-dot"></div>
+      <div class="brand">Smart Load Management</div>
+    </div>
+    <div class="right">
+      <a class="nav-link" href="/dashboard">Dashboard</a>
+      <a class="nav-link" href="/configuration">Configuration</a>
+      <a class="nav-link active" href="/logs">Logs</a>
+      <button id="btnLogout" class="menu-btn">Logout</button>
+      <button id="themeToggle" class="menu-btn" aria-pressed="false">🌙 Night mode</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <section class="card">
+      <div class="card-title">Filter</div>
+      <div class="row gap" style="align-items:flex-end">
+        <div>
+          <div class="label">From (local time)</div>
+          <input id="dtFrom" class="input" type="datetime-local"/>
+        </div>
+        <div>
+          <div class="label">To (local time)</div>
+          <input id="dtTo" class="input" type="datetime-local"/>
+        </div>
+        <div>
+          <button id="btnLoad" class="btn btn-primary">Load</button>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:8px">
+          <button id="btnExport" class="btn">Export</button>
+          <button id="btnPrint" class="btn">Print</button>
+        </div>
+      </div>
+      <div class="small muted" id="hint"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Logs</div>
+      <div style="overflow:auto">
+        <table id="tbl" style="width:100%; border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:8px; border-bottom:1px solid #243149">Timestamp</th>
+              <th style="text-align:right; padding:8px; border-bottom:1px solid #243149">Budget (kWh)</th>
+              <th style="text-align:right; padding:8px; border-bottom:1px solid #243149">Remaining (kWh)</th>
+              <th style="text-align:right; padding:8px; border-bottom:1px solid #243149">Used (kWh)</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div id="meta" class="small muted" style="margin-top:8px"></div>
+    </section>
+  </main>
+
+  <script src="/js/app.js"></script>
+  <script src="/js/logs.js"></script>
+</body>
+</html>

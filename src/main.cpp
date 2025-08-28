@@ -10,15 +10,16 @@
 #include <RTClib.h>
 #include <PZEM004Tv30.h>
 #include <math.h>
+#include <vector>
+#include <algorithm>
 
 /* ===================== Wi-Fi (STA) ===================== */
 #define STA_SSID "HG8145V5_D0A04"
 #define STA_PASS "p75z~${Tn2Iy"
 
 /* ===================== PZEM wiring (UART2) ===================== */
-// ESP32 RX2 <- PZEM TX (via divider), ESP32 TX2 -> PZEM RX
-static const int PZEM_RX = 26;
-static const int PZEM_TX = 25;
+static const int PZEM_RX = 26; // ESP32 RX2 <- PZEM TX
+static const int PZEM_TX = 25; // ESP32 TX2 -> PZEM RX
 HardwareSerial PZEMSerial(2);
 PZEM004Tv30 pzem(PZEMSerial, PZEM_RX, PZEM_TX);
 
@@ -99,10 +100,15 @@ struct AppConfig {
   bool   show_prio_controls = false;
 } appcfg;
 
+/* ===================== FS mount flags ===================== */
+static bool littlefsMounted = false;
+
 /* ===================== Forwards ===================== */
-double virtualTotalKWh();
-void   savePauseSnapshot();
-bool   loadPauseSnapshot();
+double  virtualTotalKWh();
+void    savePauseSnapshot();
+bool    loadPauseSnapshot();
+static  String urlDecode(const String &s);   // forward declare
+static  bool   parseBoolStr(String v);
 
 /* ===================== FS helpers ===================== */
 bool fileExists(fs::FS &fs, const char* path){
@@ -240,7 +246,7 @@ double frozenRem  = 0.004;
 float  frozenPct  = 100.0f;
 
 void savePauseSnapshot(){
-  if(!LittleFS.begin(false,"/littlefs")) return;
+  if(!littlefsMounted) return;
   JsonDocument d;
   d["paused"]       = paused;
   d["usedKWh"]      = frozenUsed;
@@ -253,7 +259,7 @@ void savePauseSnapshot(){
 }
 
 bool loadPauseSnapshot(){
-  if(!LittleFS.begin(false,"/littlefs")) return false;
+  if(!littlefsMounted) return false;
   if(!LittleFS.exists("/state.json"))    return false;
   File f = LittleFS.open("/state.json","r");
   if(!f) return false;
@@ -263,7 +269,7 @@ bool loadPauseSnapshot(){
   if(e) return false;
 
   energyBaseline = d["baseline_kwh"] | 0.0;
-  baselineFromSnapshot = d.containsKey("baseline_kwh");
+  baselineFromSnapshot = d["baseline_kwh"].is<double>();  // ArduinoJson v7 style
 
   frozenUsed = d["usedKWh"] | 0.0;
   frozenRem  = d["remKWh"]  | budgetKWh;
@@ -277,7 +283,6 @@ bool loadPauseSnapshot(){
 
 /* ===================== CSV restore (FIXED) ===================== */
 static bool isLogCsvName(String nm){
-  // accept with or without leading '/'
   String low = nm; low.toLowerCase();
   if(low.length() && low[0]=='/') low.remove(0,1);
   return low.startsWith("logs_") && low.endsWith(".csv");
@@ -295,7 +300,7 @@ static String findLatestLogCsv(){
     File f = root.openNextFile();
     if(!f) break;
     if(!f.isDirectory()){
-      String nm = String(f.name());  // often "logs_*.csv" (no slash)
+      String nm = String(f.name());
       if(isLogCsvName(nm)){
         nm = ensureLeadingSlash(nm);
         if(latest == "" || nm > latest) latest = nm;
@@ -328,12 +333,9 @@ static bool loadSnapshotFromCsv(){
   if(lastLine==""){ Serial.println("[CSV] empty file"); return false; }
 
   // timestamp,budget_kwh,remaining_kwh,used_kwh
-  int c1 = lastLine.indexOf(',');
-  if(c1<0) return false;
-  int c2 = lastLine.indexOf(',', c1+1);
-  if(c2<0) return false;
-  int c3 = lastLine.indexOf(',', c2+1);
-  if(c3<0) return false;
+  int c1 = lastLine.indexOf(','); if(c1<0) return false;
+  int c2 = lastLine.indexOf(',', c1+1); if(c2<0) return false;
+  int c3 = lastLine.indexOf(',', c2+1); if(c3<0) return false;
 
   float b   = lastLine.substring(c1+1, c2).toFloat();
   float rem = lastLine.substring(c2+1, c3).toFloat();
@@ -350,7 +352,7 @@ static bool loadSnapshotFromCsv(){
   frozenPct  = min(100.0f, max(0.0f, frozenPct));
 
   // align baseline so that used = (virtualTotal - baseline)
-  double vt = virtualTotalKWh();            // single read; may be ~0 at boot
+  double vt = virtualTotalKWh();
   energyBaseline = vt - (double)frozenUsed;
   baselineFromSnapshot = true;
 
@@ -507,87 +509,7 @@ void handleStatus(AsyncWebServerRequest*req){
   req->send(200,"application/json",out);
 }
 
-/* ===== CSV end-points ===== */
-bool isCsvNameSafe(String p) {
-  if (p.length() == 0) return false;
-  if (p.indexOf("..") >= 0) return false;
-  if (p[0] != '/') p = "/" + p;
-  String low = p; low.toLowerCase();
-  if (!low.endsWith(".csv")) return false;
-  for (size_t i = 0; i < p.length(); ++i) {
-    char c = p[i];
-    bool ok = (c=='/' || c=='_' || c=='-' || c=='.' ||
-               (c>='0'&&c<='9') || (c>='A'&&c<='Z') || (c>='a'&&c<='z'));
-    if (!ok) return false;
-  }
-  return true;
-}
-void handleCsvList(AsyncWebServerRequest* req) {
-  if (!hasAuth(req)) { req->send(401); return; }
-  String dir = "/";
-  if (req->hasParam("dir")) {
-    dir = req->getParam("dir")->value();
-    if (dir.length()==0 || dir[0] != '/') dir = "/" + dir;
-  }
-  if (!SD.begin(SD_CS)) { req->send(500, "application/json", "{\"error\":\"SD not mounted\"}"); return; }
-  File root = SD.open(dir);
-  if (!root || !root.isDirectory()) { req->send(404, "application/json", "{\"error\":\"dir not found\"}"); return; }
-
-  auto *res = req->beginResponseStream("application/json");
-  res->print("["); bool first = true;
-  while (true) {
-    File f = root.openNextFile();
-    if (!f) break;
-    if (!f.isDirectory()) {
-      String name = String(f.name()); String low=name; low.toLowerCase();
-      if (low.endsWith(".csv")) {
-        if (!first) res->print(",");
-        first = false;
-        res->print("{\"name\":\""); res->print(name);
-        res->print("\",\"size\":");  res->print(f.size()); res->print("}");
-      }
-    }
-    f.close();
-  }
-  root.close();
-  res->print("]");
-  req->send(res);
-}
-void handleCsvGet(AsyncWebServerRequest* req) {
-  if (!hasAuth(req)) { req->send(401); return; }
-  if (!req->hasParam("name")) { req->send(400, "text/plain", "Missing name"); return; }
-  String name = req->getParam("name")->value();
-  if (name.length()==0) { req->send(400, "text/plain", "Invalid name"); return; }
-  if (name[0] != '/') name = "/" + name;
-  if (!isCsvNameSafe(name)) { req->send(400, "text/plain", "Invalid or unsupported filename"); return; }
-  if (!SD.begin(SD_CS))      { req->send(500, "text/plain", "SD not mounted"); return; }
-  if (!SD.exists(name))      { req->send(404, "text/plain", "Not found"); return; }
-  AsyncWebServerResponse *res = req->beginResponse(SD, name, "text/csv");
-  if (req->hasParam("download")) {
-    String leaf = name.substring(name.lastIndexOf('/') + 1);
-    res->addHeader("Content-Disposition", "attachment; filename=\"" + leaf + "\"");
-  }
-  req->send(res);
-}
-
-/* ===== Config HTTP helpers & handlers ===== */
-static String urlDecode(const String &s){
-  String out; out.reserve(s.length());
-  for (size_t i=0;i<s.length();++i){
-    char c=s[i];
-    if (c=='%'){
-      if (i+2<s.length()){
-        char h1=s[i+1], h2=s[i+2];
-        auto hex=[&](char h)->int{ if(h>='0'&&h<='9') return h-'0'; if(h>='A'&&h<='F') return h-'A'+10; if(h>='a'&&h<='f') return h-'a'+10; return 0; };
-        out += char((hex(h1)<<4)|hex(h2)); i+=2;
-      }
-    } else if (c=='+') out+=' ';
-    else out+=c;
-  }
-  return out;
-}
-static bool parseBoolStr(String v){ v.toLowerCase(); return (v=="1"||v=="true"||v=="yes"||v=="on"); }
-
+/* ===== Config HTTP handlers (REST) ===== */
 void handleConfigGet(AsyncWebServerRequest* req){
   if(!hasAuth(req)){ req->send(401); return; }
   JsonDocument d;
@@ -688,6 +610,72 @@ void handleConfigBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, siz
   req->send(200, "application/json", s);
 }
 
+/* ===== CSV end-points ===== */
+bool isCsvNameSafe(String p) {
+  if (p.length() == 0) return false;
+  if (p.indexOf("..") >= 0) return false;
+  if (p[0] != '/') p = "/" + p;
+  String low = p; low.toLowerCase();
+  if (!low.endsWith(".csv")) return false;
+  for (size_t i = 0; i < p.length(); ++i) {
+    char c = p[i];
+    bool ok = (c=='/' || c=='_' || c=='-' || c=='.' ||
+               (c>='0'&&c<='9') || (c>='A'&&c<='Z') || (c>='a'&&c<='z'));
+    if (!ok) return false;
+  }
+  return true;
+}
+void handleCsvList(AsyncWebServerRequest* req) {
+  if (!hasAuth(req)) { req->send(401); return; }
+  String dir = "/";
+  if (req->hasParam("dir")) {
+    dir = req->getParam("dir")->value();
+    if (dir.length()==0 || dir[0] != '/') dir = "/" + dir;
+  }
+  if (!SD.begin(SD_CS)) { req->send(500, "application/json", "{\"error\":\"SD not mounted\"}"); return; }
+  File root = SD.open(dir);
+  if (!root || !root.isDirectory()) { req->send(404, "application/json", "{\"error\":\"dir not found\"}"); return; }
+
+  auto *res = req->beginResponseStream("application/json");
+  res->print("["); bool first = true;
+  while (true) {
+    File f = root.openNextFile();
+    if (!f) break;
+    if (!f.isDirectory()) {
+      String name = String(f.name()); String low=name; low.toLowerCase();
+      if (low.endsWith(".csv")) {
+        if (!first) res->print(",");
+        first = false;
+        res->print("{\"name\":\""); res->print(name);
+        res->print("\",\"size\":");  res->print(f.size()); res->print("}");
+      }
+    }
+    f.close();
+    // yield to avoid watchdog on huge dirs
+    static uint32_t lastY = millis();
+    if (millis() - lastY > 10) { delay(0); lastY = millis(); }
+  }
+  root.close();
+  res->print("]");
+  req->send(res);
+}
+void handleCsvGet(AsyncWebServerRequest* req) {
+  if (!hasAuth(req)) { req->send(401); return; }
+  if (!req->hasParam("name")) { req->send(400, "text/plain", "Missing name"); return; }
+  String name = req->getParam("name")->value();
+  if (name.length()==0) { req->send(400, "text/plain", "Invalid name"); return; }
+  if (name[0] != '/') name = "/" + name;
+  if (!isCsvNameSafe(name)) { req->send(400, "text/plain", "Invalid or unsupported filename"); return; }
+  if (!SD.begin(SD_CS))      { req->send(500, "text/plain", "SD not mounted"); return; }
+  if (!SD.exists(name))      { req->send(404, "text/plain", "Not found"); return; }
+  AsyncWebServerResponse *res = req->beginResponse(SD, name, "text/csv");
+  if (req->hasParam("download")) {
+    String leaf = name.substring(name.lastIndexOf('/') + 1);
+    res->addHeader("Content-Disposition", "attachment; filename=\"" + leaf + "\"");
+  }
+  req->send(res);
+}
+
 /* ===== Login/Logout ===== */
 void handleLoginBody(AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total){
   if (index==0) req->_tempObject = new String();
@@ -755,6 +743,277 @@ void handleLogout(AsyncWebServerRequest* req){
   req->send(res);
 }
 
+/* ===================== LOGS (merge+filter across logs_*.csv) ===================== */
+struct LogRow {
+  String ts;  // "YYYY-MM-DD HH:MM:SS"
+  double budget, rem, used;
+};
+static time_t parseTimestampLocal(const String& s){
+  if (s.length() < 19) return 0;
+  int y = s.substring(0,4).toInt();
+  int m = s.substring(5,7).toInt();
+  int d = s.substring(8,10).toInt();
+  int hh= s.substring(11,13).toInt();
+  int mm= s.substring(14,16).toInt();
+  int ss= s.substring(17,19).toInt();
+  DateTime dt(y,m,d,hh,mm,ss);
+  return dt.unixtime(); // treat as local
+}
+static bool isLogsCsv(const String& name){
+  String low = name; low.toLowerCase();
+  if (low.length() && low[0]=='/') low.remove(0,1);
+  return low.startsWith("logs_") && low.endsWith(".csv");
+}
+static void collectLogFiles(std::vector<String>& out){
+  if (!SD.begin(SD_CS)) return;
+  File root = SD.open("/");
+  if (!root || !root.isDirectory()) return;
+  while(true){
+    File f = root.openNextFile();
+    if (!f) break;
+    if (!f.isDirectory()){
+      String nm = String(f.name());
+      if (isLogsCsv(nm)){
+        if (nm[0] != '/') nm = "/" + nm;
+        out.push_back(nm);
+      }
+    }
+    f.close();
+    static uint32_t lastY = millis();
+    if (millis() - lastY > 10) { delay(0); lastY = millis(); }
+  }
+  root.close();
+  std::sort(out.begin(), out.end()); // filename order is chronological by hour
+}
+static bool parseCsvLine(const String& line, LogRow& row){
+  int c1 = line.indexOf(','); if (c1<0) return false;
+  int c2 = line.indexOf(',', c1+1); if (c2<0) return false;
+  int c3 = line.indexOf(',', c2+1); if (c3<0) return false;
+  row.ts    = line.substring(0, c1);
+  row.budget= line.substring(c1+1, c2).toDouble();
+  row.rem   = line.substring(c2+1, c3).toDouble();
+  row.used  = line.substring(c3+1).toDouble();
+  return true;
+}
+static void handleLogsQuery(AsyncWebServerRequest* req){
+  if (!hasAuth(req)) { req->send(401); return; }
+
+  time_t tFrom = 0, tTo = 0;
+  if (req->hasParam("from")) { String f = req->getParam("from")->value(); f.replace('T',' '); tFrom = parseTimestampLocal(f); }
+  if (req->hasParam("to"))   { String t = req->getParam("to")->value();   t.replace('T',' '); tTo   = parseTimestampLocal(t); }
+
+  std::vector<String> files; files.reserve(64);
+  collectLogFiles(files);
+
+  auto *res = req->beginResponseStream("application/json");
+  res->print("{\"items\":[");
+  bool firstOut = true;
+  uint32_t lastY = millis();
+  size_t rowCount = 0;
+
+  for (size_t i=0;i<files.size();++i){
+    File f = SD.open(files[i], "r");
+    if (!f) continue;
+    while (f.available()){
+      String line = f.readStringUntil('\n'); line.trim();
+      if (line.length()==0 || line.startsWith("timestamp")) continue;
+      LogRow r; if (!parseCsvLine(line, r)) continue;
+      time_t tRow = parseTimestampLocal(r.ts);
+      if (tFrom && tRow < tFrom) continue;
+      if (tTo   && tRow > tTo)   continue;
+
+      if (!firstOut) res->print(",");
+      firstOut = false;
+      res->print("{\"timestamp\":\""); res->print(r.ts);
+      res->print("\",\"budget_kwh\":"); res->print(r.budget, 6);
+      res->print(",\"remaining_kwh\":"); res->print(r.rem, 6);
+      res->print(",\"used_kwh\":"); res->print(r.used, 6);
+      res->print("}");
+
+      // cooperative yield every ~200 rows or 10ms
+      if (++rowCount % 200 == 0 || (millis() - lastY > 10)) { delay(0); lastY = millis(); }
+    }
+    f.close();
+    if (millis() - lastY > 10) { delay(0); lastY = millis(); }
+  }
+
+  res->print("]}");
+  req->send(res);
+}
+static void handleLogsExport(AsyncWebServerRequest* req){
+  if (!hasAuth(req)) { req->send(401); return; }
+
+  time_t tFrom = 0, tTo = 0;
+  if (req->hasParam("from")) { String f = req->getParam("from")->value(); f.replace('T',' '); tFrom = parseTimestampLocal(f); }
+  if (req->hasParam("to"))   { String t = req->getParam("to")->value();   t.replace('T',' '); tTo   = parseTimestampLocal(t); }
+
+  std::vector<String> files; files.reserve(64);
+  collectLogFiles(files);
+
+  auto *res = req->beginResponseStream("text/csv");
+  res->addHeader("Content-Disposition", "attachment; filename=\"smartload_logs.csv\"");
+  res->print("timestamp,budget_kwh,remaining_kwh,used_kwh\n");
+
+  uint32_t lastY = millis();
+  size_t rowCount = 0;
+
+  for (size_t i=0;i<files.size();++i){
+    File f = SD.open(files[i], "r");
+    if (!f) continue;
+    while (f.available()){
+      String line = f.readStringUntil('\n'); line.trim();
+      if (line.length()==0 || line.startsWith("timestamp")) continue;
+      LogRow r; if (!parseCsvLine(line, r)) continue;
+      time_t tRow = parseTimestampLocal(r.ts);
+      if (tFrom && tRow < tFrom) continue;
+      if (tTo   && tRow > tTo)   continue;
+
+      res->print(r.ts); res->print(",");
+      res->print(String(r.budget, 6)); res->print(",");
+      res->print(String(r.rem, 6));    res->print(",");
+      res->print(String(r.used, 6));   res->print("\n");
+
+      if (++rowCount % 200 == 0 || (millis() - lastY > 10)) { delay(0); lastY = millis(); }
+    }
+    f.close();
+    if (millis() - lastY > 10) { delay(0); lastY = millis(); }
+  }
+  req->send(res);
+}
+
+/* ===== NEW: Excel .xls export (SpreadsheetML 2003) ===== */
+static void handleLogsExportXls(AsyncWebServerRequest* req){
+  if (!hasAuth(req)) { req->send(401); return; }
+
+  time_t tFrom = 0, tTo = 0;
+  if (req->hasParam("from")) { String f = req->getParam("from")->value(); f.replace('T',' '); tFrom = parseTimestampLocal(f); }
+  if (req->hasParam("to"))   { String t = req->getParam("to")->value();   t.replace('T',' '); tTo   = parseTimestampLocal(t); }
+
+  std::vector<String> files; files.reserve(64);
+  collectLogFiles(files);
+
+  auto *res = req->beginResponseStream("application/vnd.ms-excel");
+  res->addHeader("Content-Disposition","attachment; filename=\"smartload_logs.xls\"");
+
+  res->print("<?xml version=\"1.0\"?>\n");
+  res->print("<?mso-application progid=\"Excel.Sheet\"?>\n");
+  res->print("<Workbook xmlns=\"urn:schemas-microsoft-com:office:spreadsheet\" "
+             "xmlns:o=\"urn:schemas-microsoft-com:office:office\" "
+             "xmlns:x=\"urn:schemas-microsoft-com:office:excel\" "
+             "xmlns:ss=\"urn:schemas-microsoft-com:office:spreadsheet\" "
+             "xmlns:html=\"http://www.w3.org/TR/REC-html40\">\n");
+  res->print("<Worksheet ss:Name=\"Logs\"><Table>\n");
+  res->print("<Row>"
+               "<Cell><Data ss:Type=\"String\">timestamp</Data></Cell>"
+               "<Cell><Data ss:Type=\"String\">budget_kwh</Data></Cell>"
+               "<Cell><Data ss:Type=\"String\">remaining_kwh</Data></Cell>"
+               "<Cell><Data ss:Type=\"String\">used_kwh</Data></Cell>"
+             "</Row>\n");
+
+  uint32_t lastY = millis();
+  size_t rowCount = 0;
+
+  for (size_t i=0;i<files.size();++i){
+    File f = SD.open(files[i], "r");
+    if (!f) continue;
+    while (f.available()){
+      String line = f.readStringUntil('\n'); line.trim();
+      if (line.length()==0 || line.startsWith("timestamp")) continue;
+
+      LogRow r; if (!parseCsvLine(line, r)) continue;
+      time_t tRow = parseTimestampLocal(r.ts);
+      if (tFrom && tRow < tFrom) continue;
+      if (tTo   && tRow > tTo)   continue;
+
+      res->print("<Row>");
+      res->print("<Cell><Data ss:Type=\"String\">"); res->print(r.ts);        res->print("</Data></Cell>");
+      res->print("<Cell><Data ss:Type=\"Number\">"); res->print(r.budget, 6); res->print("</Data></Cell>");
+      res->print("<Cell><Data ss:Type=\"Number\">"); res->print(r.rem, 6);    res->print("</Data></Cell>");
+      res->print("<Cell><Data ss:Type=\"Number\">"); res->print(r.used, 6);   res->print("</Data></Cell>");
+      res->print("</Row>\n");
+
+      if (++rowCount % 200 == 0 || (millis() - lastY > 10)) { delay(0); lastY = millis(); }
+    }
+    f.close();
+    if (millis() - lastY > 10) { delay(0); lastY = millis(); }
+  }
+
+  res->print("</Table></Worksheet></Workbook>\n");
+  req->send(res);
+}
+
+/* ===== NEW: Print (printer-friendly HTML) ===== */
+static void handleLogsPrint(AsyncWebServerRequest* req){
+  if (!hasAuth(req)) { req->send(401); return; }
+
+  time_t tFrom = 0, tTo = 0;
+  if (req->hasParam("from")) { String f = req->getParam("from")->value(); f.replace('T',' '); tFrom = parseTimestampLocal(f); }
+  if (req->hasParam("to"))   { String t = req->getParam("to")->value();   t.replace('T',' '); tTo   = parseTimestampLocal(t); }
+
+  std::vector<String> files; files.reserve(64);
+  collectLogFiles(files);
+
+  auto *res = req->beginResponseStream("text/html; charset=utf-8");
+  res->print("<!doctype html><html><head><meta charset='utf-8'>"
+             "<title>SmartLoad Logs</title>"
+             "<style>body{font:14px Arial;margin:24px;} table{border-collapse:collapse;width:100%;}"
+             "th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;} th{background:#f5f5f5;}"
+             "@media print{body{margin:0;} thead{display:table-header-group;}}</style>"
+             "</head><body onload='window.print()'>"
+             "<h2>SmartLoad Logs</h2>"
+             "<table><thead><tr>"
+             "<th>timestamp</th><th>budget_kwh</th><th>remaining_kwh</th><th>used_kwh</th>"
+             "</tr></thead><tbody>");
+
+  uint32_t lastY = millis();
+  size_t rowCount = 0;
+
+  for (size_t i=0;i<files.size();++i){
+    File f = SD.open(files[i], "r");
+    if (!f) continue;
+    while (f.available()){
+      String line = f.readStringUntil('\n'); line.trim();
+      if (line.length()==0 || line.startsWith("timestamp")) continue;
+      LogRow r; if (!parseCsvLine(line, r)) continue;
+      time_t tRow = parseTimestampLocal(r.ts);
+      if (tFrom && tRow < tFrom) continue;
+      if (tTo   && tRow > tTo)   continue;
+
+      res->print("<tr>");
+      res->print("<td>"); res->print(r.ts);        res->print("</td>");
+      res->print("<td>"); res->print(r.budget, 6); res->print("</td>");
+      res->print("<td>"); res->print(r.rem, 6);    res->print("</td>");
+      res->print("<td>"); res->print(r.used, 6);   res->print("</td>");
+      res->print("</tr>");
+
+      if (++rowCount % 200 == 0 || (millis() - lastY > 10)) { delay(0); lastY = millis(); }
+    }
+    f.close();
+    if (millis() - lastY > 10) { delay(0); lastY = millis(); }
+  }
+
+  res->print("</tbody></table></body></html>");
+  req->send(res);
+}
+
+/* ===================== URL decode helpers ===================== */
+static String urlDecode(const String &s){
+  String out; out.reserve(s.length());
+  for (size_t i=0;i<s.length();++i){
+    char c=s[i];
+    if (c=='%'){
+      if (i+2<s.length()){
+        char h1=s[i+1], h2=s[i+2];
+        auto hex=[&](char h)->int{ if(h>='0'&&h<='9') return h-'0'; if(h>='A'&&h<='F') return h-'A'+10; if(h>='a'&&h<='f') return h-'a'+10; return 0; };
+        out += char((hex(h1)<<4)|hex(h2)); i+=2;
+      }
+    } else if (c=='+') out+=' ';
+    else out+=c;
+  }
+  return out;
+}
+static bool parseBoolStr(String v){ v.toLowerCase(); return (v=="1"||v=="true"||v=="yes"||v=="on"); }
+
 /* ===================== Wi-Fi ===================== */
 void startWiFi(){
   WiFi.mode(WIFI_STA); WiFi.begin(STA_SSID,STA_PASS);
@@ -771,10 +1030,13 @@ uint32_t lastStateSaveMs = 0;
 void setup(){
   Serial.begin(115200); delay(100);
 
-  if(!LittleFS.begin(true,"/littlefs",10,"littlefs")){
-    Serial.println("[LittleFS] mount/format failed");
-  } else {
+  // Mount LittleFS ONCE with explicit label "littlefs"
+  if(LittleFS.begin(true, "/littlefs", 10, "littlefs")){
+    littlefsMounted = true;
     Serial.println("[LittleFS] mounted");
+  } else {
+    littlefsMounted = false;
+    Serial.println("[LittleFS] mount/format failed");
   }
 
   initGroupPins(); allGroups(false);
@@ -814,7 +1076,10 @@ void setup(){
   server.on("/",HTTP_GET,[](AsyncWebServerRequest* r){ r->redirect("/dashboard"); });
   server.on("/dashboard",HTTP_GET,[](AsyncWebServerRequest* r){ if(hasAuth(r)) r->send(LittleFS,"/dashboard.html","text/html"); else r->redirect("/login"); });
   server.on("/configuration",HTTP_GET,[](AsyncWebServerRequest* r){ if(hasAuth(r)) r->send(LittleFS,"/configuration.html","text/html"); else r->redirect("/login"); });
+  server.on("/logs",HTTP_GET,[](AsyncWebServerRequest* r){ if(hasAuth(r)) r->send(LittleFS,"/logs.html","text/html"); else r->redirect("/login"); });
   server.on("/login",HTTP_GET,[](AsyncWebServerRequest* r){ r->send(LittleFS,"/login.html","text/html"); });
+
+  // Static files AFTER specific routes
   server.serveStatic("/",LittleFS,"/");
 
   // APIs
@@ -889,6 +1154,12 @@ void setup(){
   server.on("/api/logout", HTTP_POST, handleLogout);
   server.on("/api/sd/csvs", HTTP_GET, handleCsvList);
   server.on("/api/sd/csv",  HTTP_GET, handleCsvGet);
+
+  // Logs APIs
+  server.on("/api/logs/query",      HTTP_GET, handleLogsQuery);
+  server.on("/api/logs/export",     HTTP_GET, handleLogsExport);     // CSV
+  server.on("/api/logs/export.xls", HTTP_GET, handleLogsExportXls);  // Excel
+  server.on("/api/logs/print",      HTTP_GET, handleLogsPrint);      // Print
 
   server.begin();
 

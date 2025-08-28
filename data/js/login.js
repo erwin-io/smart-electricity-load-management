@@ -22,3 +22,15 @@ async function login(){
     msg.textContent = e.message || "Network error.";
   }
 }
+  // Get all input tags inside it
+  const inputs = $("login").getElementsByTagName("input");
+
+  // Example: loop through and log values
+  for (let i = 0; i < inputs.length; i++) {
+    inputs[i].addEventListener("keydown", function(event) {
+      if (event.key === "Enter") {
+        login();
+        event.preventDefault();
+      }
+    });
+  }

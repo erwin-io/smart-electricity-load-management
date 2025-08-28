@@ -1,21 +1,26 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Smart Load · Dashboard</title>
+  <title>Smart Load Management · Dashboard</title>
+  <link rel="icon" type="image/x-icon" href="/image/favicon.ico">
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
+
 <body class="app">
   <header class="topbar">
     <div class="left">
       <div class="logo-dot"></div>
-      <div class="brand">Smart Load</div>
+      <div class="brand">Smart Load Management</div>
     </div>
     <div class="right">
       <a class="nav-link active" href="/dashboard">Dashboard</a>
       <a class="nav-link" href="/configuration">Configuration</a>
+      <a class="nav-link" href="/logs">Logs</a>
       <button id="btnLogout" class="menu-btn">Logout</button>
+      <button id="themeToggle" class="menu-btn" aria-pressed="false">🌙 Night mode</button>
     </div>
   </header>
 
@@ -26,13 +31,11 @@
       <div class="grid-3">
         <div>
           <div class="kpi-title">Remaining %</div>
-          <div id="kpiPct" class="kpi">—</div>
           <!-- Gauge -->
           <div class="gauge-wrap">
             <div id="gaugeRemain" class="gauge" style="--p:0">
               <span id="gaugeLabel">0%</span>
             </div>
-            <div class="muted small">Budget visual</div>
           </div>
         </div>
         <div>
@@ -91,4 +94,5 @@
   <script src="/js/app.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
+
 </html>
